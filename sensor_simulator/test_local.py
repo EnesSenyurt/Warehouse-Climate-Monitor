@@ -1,8 +1,8 @@
 """
-MQTT broker olmadan sensör mantığını doğrulayan hızlı test.
-Bir kaç tur okuma yapar ve değerlerin makul aralıkta olduğunu kontrol eder.
+Quick smoke test that validates the sensor logic without an MQTT broker.
+Runs a few reading cycles and checks values are within a sane range.
 
-Kullanım:
+Usage:
     python test_local.py
 """
 
@@ -11,19 +11,19 @@ from simulator import WarehouseSensor
 
 
 def main() -> None:
-    for depo_id, cfg in WAREHOUSES.items():
-        sensor = WarehouseSensor(depo_id=depo_id, cfg=cfg)
+    for warehouse_id, cfg in WAREHOUSES.items():
+        sensor = WarehouseSensor(warehouse_id=warehouse_id, cfg=cfg)
         readings = [sensor.read() for _ in range(5)]
-        temps = [r["sicaklik"] for r in readings]
-        hums = [r["nem"] for r in readings]
+        temps = [r["temperature"] for r in readings]
+        hums = [r["humidity"] for r in readings]
         print(
-            f"{cfg['name']:<18} "
-            f"T[{min(temps):.2f}..{max(temps):.2f}]°C  "
+            f"{cfg['name']:<20} "
+            f"T[{min(temps):.2f}..{max(temps):.2f}]C  "
             f"H[{min(hums):.2f}..{max(hums):.2f}]%"
         )
-        # Basit sağlık kontrolü - normal aralığın makul yakınında olmalı
-        assert all(-10 < t < 60 for t in temps), "Sıcaklık makul dışı"
-        assert all(0 <= h <= 100 for h in hums), "Nem 0-100 dışı"
+        # Basic sanity - values should be near the configured range
+        assert all(-10 < t < 60 for t in temps), "temperature out of sane range"
+        assert all(0 <= h <= 100 for h in hums), "humidity outside 0-100"
 
     print("OK - sensor logic works.")
 

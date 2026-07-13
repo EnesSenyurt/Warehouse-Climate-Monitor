@@ -1,15 +1,15 @@
 """
-Sensör simülatörü.
+Sensor simulator.
 
-Her depo için ayrı bir "sanal sensör" çalıştırır. Sensörler:
-  - Sinüs fonksiyonu ile gün içi doğal dalgalanma üretir
-  - Küçük rastgele gürültü ekler (gerçek sensör toleransı hissi)
-  - Rastgele zamanlarda anomali senaryosu tetikler
-    (örn. "kapı açık kaldı" -> sıcaklık hızlıca artar)
-  - MQTT broker'a `depo/{depo_id}/sicaklik` ve
-    `depo/{depo_id}/nem` topic'lerinde yayın yapar.
+Runs one "virtual sensor" per warehouse. Each sensor:
+  - Generates a diurnal variation via a sine wave
+  - Adds small random noise (mimics real sensor tolerance)
+  - Occasionally triggers an anomaly scenario
+    (e.g. "door left open" -> temperature spikes)
+  - Publishes to MQTT topics `warehouse/{warehouse_id}/temperature`
+    and `warehouse/{warehouse_id}/humidity`.
 
-Bu dosya tek başına çalışabilir:
+Can be run standalone:
     python simulator.py
 """
 
@@ -40,7 +40,7 @@ from config import (
 
 @dataclass
 class AnomalyState:
-    """Depoda o an aktif olan anomali (varsa)."""
+    """The currently active anomaly for a warehouse (if any)."""
     active: bool = False
     ends_at: float = 0.0
     scenario: str = ""
@@ -50,46 +50,46 @@ class AnomalyState:
 
 @dataclass
 class WarehouseSensor:
-    """Tek bir depo için sanal sensör."""
-    depo_id: str
+    """Virtual sensor for a single warehouse."""
+    warehouse_id: str
     cfg: dict
     anomaly: AnomalyState = field(default_factory=AnomalyState)
     started_at: float = field(default_factory=time.time)
 
     def _diurnal(self, center: float, amplitude: float) -> float:
         """
-        Gün içi sinüs dalgası. 24 saatlik periyot ile modellenmiş,
-        ancak simülasyonu hızlı görebilmek için 10 dakikaya sıkıştırdım.
-        Böylece sunum sırasında bir "gün döngüsü" birkaç dakikada gözlenebilir.
+        Diurnal sine wave. Modelled as a 24h period but compressed to
+        10 minutes so that a full "day cycle" is observable during a
+        demo in just a few minutes.
         """
-        period_seconds = 600  # 10 dk = 1 gün simülasyonu
+        period_seconds = 600  # 10 min = 1 simulated day
         elapsed = time.time() - self.started_at
         phase = (elapsed % period_seconds) / period_seconds * 2 * math.pi
         return center + amplitude * math.sin(phase)
 
     def _maybe_trigger_anomaly(self) -> None:
-        """Rastgele bir anomali başlatma denemesi."""
+        """Randomly try to start an anomaly."""
         if self.anomaly.active:
             return
         if random.random() > ANOMALY_PROBABILITY:
             return
 
-        # Senaryo seç
+        # Pick a scenario
         scenario = random.choice([
-            "kapi_acik_kaldi",       # sıcaklık aniden artar
-            "sogutucu_arizasi",      # sıcaklık yavaş yavaş yükselir
-            "nem_sizinti",           # nem aniden yükselir
-            "isitici_arizasi",       # sıcaklık düşer
+            "door_left_open",        # sudden temperature rise
+            "cooler_failure",        # temperature drifts up
+            "humidity_leak",         # humidity spikes
+            "heater_failure",        # temperature drops
         ])
         duration = random.uniform(ANOMALY_DURATION_MIN, ANOMALY_DURATION_MAX)
 
-        if scenario == "kapi_acik_kaldi":
+        if scenario == "door_left_open":
             temp_off, hum_off = random.uniform(6, 10), random.uniform(5, 12)
-        elif scenario == "sogutucu_arizasi":
+        elif scenario == "cooler_failure":
             temp_off, hum_off = random.uniform(4, 7), 0.0
-        elif scenario == "nem_sizinti":
+        elif scenario == "humidity_leak":
             temp_off, hum_off = 0.0, random.uniform(15, 25)
-        else:  # isitici_arizasi
+        else:  # heater_failure
             temp_off, hum_off = -random.uniform(5, 9), 0.0
 
         self.anomaly = AnomalyState(
@@ -100,23 +100,23 @@ class WarehouseSensor:
             humidity_offset=hum_off,
         )
         print(
-            f"[ANOMALI] {self.cfg['name']}: {scenario} "
-            f"(süre ~{int(duration)}s, dT={temp_off:+.1f}, dH={hum_off:+.1f})"
+            f"[ANOMALY] {self.cfg['name']}: {scenario} "
+            f"(duration ~{int(duration)}s, dT={temp_off:+.1f}, dH={hum_off:+.1f})"
         )
 
     def _tick_anomaly(self) -> None:
-        """Süresi dolan anomaliyi kapatır."""
+        """Ends the anomaly once its duration elapses."""
         if self.anomaly.active and time.time() >= self.anomaly.ends_at:
-            print(f"[ANOMALI-BITTI] {self.cfg['name']}: {self.anomaly.scenario}")
+            print(f"[ANOMALY-END] {self.cfg['name']}: {self.anomaly.scenario}")
             self.anomaly = AnomalyState()
 
     def read(self) -> dict:
-        """Bir tur sensör okuması üretir."""
+        """Produce one sensor reading."""
         self._maybe_trigger_anomaly()
         self._tick_anomaly()
 
         temp = self._diurnal(self.cfg["temp_center"], self.cfg["temp_amplitude"])
-        temp += random.gauss(0, 0.3)  # sensör gürültüsü
+        temp += random.gauss(0, 0.3)  # sensor noise
 
         hum = self._diurnal(self.cfg["humidity_center"], self.cfg["humidity_amplitude"])
         hum += random.gauss(0, 0.8)
@@ -126,16 +126,16 @@ class WarehouseSensor:
             hum += self.anomaly.humidity_offset
 
         return {
-            "depo_id": self.depo_id,
-            "sicaklik": round(temp, 2),
-            "nem": round(max(0.0, min(100.0, hum)), 2),
+            "warehouse_id": self.warehouse_id,
+            "temperature": round(temp, 2),
+            "humidity": round(max(0.0, min(100.0, hum)), 2),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "anomali": self.anomaly.scenario if self.anomaly.active else None,
+            "anomaly": self.anomaly.scenario if self.anomaly.active else None,
         }
 
 
 class Publisher:
-    """MQTT üzerinden yayın yapan sarmalayıcı."""
+    """Thin wrapper around the MQTT client for publishing."""
 
     def __init__(self, host: str, port: int):
         self.client = mqtt.Client(client_id=f"simulator-{random.randint(1000, 9999)}")
@@ -144,35 +144,35 @@ class Publisher:
         self._connected = False
 
     def connect(self) -> None:
-        # Broker gecikmesi olabilir (docker-compose'da), tekrar dene
+        # Broker may lag on startup (docker-compose), so retry
         for attempt in range(1, 11):
             try:
                 self.client.connect(self.host, self.port, keepalive=30)
                 self.client.loop_start()
                 self._connected = True
-                print(f"[MQTT] {self.host}:{self.port} bağlantısı kuruldu.")
+                print(f"[MQTT] Connected to {self.host}:{self.port}.")
                 return
-            except Exception as e:  # broker henüz hazır olmayabilir
-                print(f"[MQTT] Bağlantı denemesi {attempt}/10 başarısız: {e}")
+            except Exception as e:  # broker may not be ready yet
+                print(f"[MQTT] Connect attempt {attempt}/10 failed: {e}")
                 time.sleep(2)
-        raise RuntimeError("MQTT broker'a bağlanılamadı.")
+        raise RuntimeError("Could not connect to MQTT broker.")
 
-    def publish(self, depo_id: str, reading: dict) -> None:
-        # Sıcaklık ve nemi ayrı topic'lere yayınlıyoruz (istenildiği gibi)
+    def publish(self, warehouse_id: str, reading: dict) -> None:
+        # Temperature and humidity go on separate topics (as required)
         payload_temp = {
-            "value": reading["sicaklik"],
+            "value": reading["temperature"],
             "unit": "C",
             "timestamp": reading["timestamp"],
-            "anomali": reading["anomali"],
+            "anomaly": reading["anomaly"],
         }
         payload_hum = {
-            "value": reading["nem"],
+            "value": reading["humidity"],
             "unit": "%",
             "timestamp": reading["timestamp"],
-            "anomali": reading["anomali"],
+            "anomaly": reading["anomaly"],
         }
-        self.client.publish(f"depo/{depo_id}/sicaklik", json.dumps(payload_temp), qos=0)
-        self.client.publish(f"depo/{depo_id}/nem", json.dumps(payload_hum), qos=0)
+        self.client.publish(f"warehouse/{warehouse_id}/temperature", json.dumps(payload_temp), qos=0)
+        self.client.publish(f"warehouse/{warehouse_id}/humidity", json.dumps(payload_hum), qos=0)
 
     def close(self) -> None:
         if self._connected:
@@ -184,21 +184,21 @@ _stop = threading.Event()
 
 
 def _graceful_exit(signum, frame):
-    print("\n[SIM] Kapatılıyor...")
+    print("\n[SIM] Shutting down...")
     _stop.set()
 
 
 def sensor_loop(sensor: WarehouseSensor, publisher: Publisher) -> None:
-    """Tek deponun okuma-yayın döngüsü."""
+    """Read-and-publish loop for a single warehouse."""
     while not _stop.is_set():
         reading = sensor.read()
-        publisher.publish(sensor.depo_id, reading)
-        flag = "!" if reading["anomali"] else " "
+        publisher.publish(sensor.warehouse_id, reading)
+        flag = "!" if reading["anomaly"] else " "
         print(
-            f" {flag} {sensor.cfg['name']:<18} "
-            f"T={reading['sicaklik']:>5.2f}°C  H={reading['nem']:>5.2f}%"
+            f" {flag} {sensor.cfg['name']:<20} "
+            f"T={reading['temperature']:>5.2f}C  H={reading['humidity']:>5.2f}%"
         )
-        # Her sensör kendi aralığını rastgele seçer, hepsi aynı anda yayın yapmasın
+        # Each sensor picks its own random interval so they don't publish in lockstep
         time.sleep(random.uniform(PUBLISH_INTERVAL_MIN, PUBLISH_INTERVAL_MAX))
 
 
@@ -210,13 +210,13 @@ def main() -> int:
     publisher.connect()
 
     threads = []
-    for depo_id, cfg in WAREHOUSES.items():
-        sensor = WarehouseSensor(depo_id=depo_id, cfg=cfg)
+    for warehouse_id, cfg in WAREHOUSES.items():
+        sensor = WarehouseSensor(warehouse_id=warehouse_id, cfg=cfg)
         t = threading.Thread(target=sensor_loop, args=(sensor, publisher), daemon=True)
         t.start()
         threads.append(t)
 
-    print(f"[SIM] {len(threads)} depo simüle ediliyor. Ctrl+C ile durdur.")
+    print(f"[SIM] Simulating {len(threads)} warehouses. Ctrl+C to stop.")
     try:
         while not _stop.is_set():
             time.sleep(1)
