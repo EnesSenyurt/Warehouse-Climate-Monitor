@@ -138,7 +138,12 @@ class Publisher:
     """Thin wrapper around the MQTT client for publishing."""
 
     def __init__(self, host: str, port: int):
-        self.client = mqtt.Client(client_id=f"simulator-{random.randint(1000, 9999)}")
+        # No callbacks are registered here - the simulator only publishes -
+        # but the API version still has to be declared under paho 2.x.
+        self.client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2,
+            client_id=f"simulator-{random.randint(1000, 9999)}",
+        )
         self.host = host
         self.port = port
         self._connected = False

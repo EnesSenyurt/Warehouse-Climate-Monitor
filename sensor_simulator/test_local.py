@@ -6,11 +6,26 @@ Usage:
     python test_local.py
 """
 
+import warnings
+
 from config import WAREHOUSES
-from simulator import WarehouseSensor
+from simulator import Publisher, WarehouseSensor
+
+
+def check_mqtt_client_setup() -> None:
+    """
+    Building a Publisher creates the paho client but does not connect.
+    paho 2.x still accepts the old callback API through a shim that warns,
+    so treat that warning as a failure.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        Publisher("localhost", 1883)
 
 
 def main() -> None:
+    check_mqtt_client_setup()
+
     for warehouse_id, cfg in WAREHOUSES.items():
         sensor = WarehouseSensor(warehouse_id=warehouse_id, cfg=cfg)
         readings = [sensor.read() for _ in range(5)]
