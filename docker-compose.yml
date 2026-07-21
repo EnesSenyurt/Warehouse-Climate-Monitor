@@ -43,7 +43,7 @@ services:
     build:
       context: ./dashboard
       args:
-        # Tarayıcı ile erişildiği için container hostname'i değil host'un IP/loopback'i
+        # Reached from the browser, so this is the host's loopback - not the container hostname
         VITE_API_BASE: http://localhost:8000
     container_name: wcm-dashboard
     depends_on:

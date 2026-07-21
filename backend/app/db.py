@@ -56,15 +56,6 @@ def connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def insert_reading(warehouse_id: str, timestamp: str, temperature: Optional[float], humidity: Optional[float]) -> None:
-    with _write_lock, connect() as conn:
-        conn.execute(
-            "INSERT INTO readings (warehouse_id, timestamp, temperature, humidity) VALUES (?, ?, ?, ?)",
-            (warehouse_id, timestamp, temperature, humidity),
-        )
-        conn.commit()
-
-
 def upsert_last_reading(warehouse_id: str, timestamp: str, temperature: Optional[float], humidity: Optional[float]) -> None:
     """
     Temperature and humidity arrive in separate MQTT messages, so instead
