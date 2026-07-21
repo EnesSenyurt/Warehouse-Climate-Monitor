@@ -190,3 +190,37 @@ def test_unrecognised_topic_is_ignored(bridge, db, topic):
 
     assert db.latest_per_warehouse() == []
     assert settle(bridge) == []
+
+
+def test_unknown_warehouse_is_dropped(bridge, db):
+    """
+    Nothing would range-check these readings and /current would never show
+    them, so storing them just grows the table with invisible rows.
+    """
+    deliver(bridge, {"value": 21.5, "timestamp": TS},
+            topic="warehouse/typo_warehouse/temperature")
+
+    assert db.latest_per_warehouse() == []
+    assert settle(bridge) == []
+
+
+def test_unknown_metric_is_dropped(bridge, db):
+    """Guards the threshold lookup, which treats any non-temperature
+    metric as humidity."""
+    deliver(bridge, {"value": 1013.0, "timestamp": TS},
+            topic="warehouse/warehouse_a/pressure")
+
+    assert db.latest_per_warehouse() == []
+    assert settle(bridge) == []
+
+
+def test_every_configured_warehouse_is_accepted(bridge, db):
+    """Complements the drop tests - the allowlist must not be too narrow."""
+    from app.config import WAREHOUSE_THRESHOLDS
+
+    for warehouse_id in WAREHOUSE_THRESHOLDS:
+        deliver(bridge, {"value": 20.0, "timestamp": TS},
+                topic=f"warehouse/{warehouse_id}/temperature")
+
+    stored = {row["warehouse_id"] for row in db.latest_per_warehouse()}
+    assert stored == set(WAREHOUSE_THRESHOLDS)
