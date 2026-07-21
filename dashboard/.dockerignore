@@ -1,0 +1,8 @@
+# A local node_modules must never shadow the one installed by `npm ci`
+# inside the image - it may be built for a different platform.
+node_modules
+dist
+
+.env
+.env.*
+npm-debug.log*
