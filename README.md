@@ -129,7 +129,18 @@ would write an alert row for every reading. The cooldown resets as soon
 as the metric reads normal again, so a new episode always alerts right
 away.
 
-## Sensor smoke test
+## Tests
+
+Backend unit tests cover the anomaly detector, the alert de-duplication
+gate, the SQLite reading-merge logic, the MQTT message handler and the
+REST endpoints. No broker or running server is needed — each test gets
+its own temporary SQLite file.
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
 
 To validate just the sensor logic without a broker:
 
@@ -144,7 +155,8 @@ python test_local.py
 Warehouse-Climate-Monitor/
 ├── sensor_simulator/       # Python - virtual sensors
 ├── backend/                # FastAPI + MQTT + SQLite
-│   └── app/
+│   ├── app/
+│   └── tests/              # pytest suite
 ├── dashboard/              # React + Vite
 │   └── src/
 ├── mosquitto/config/       # Broker configuration
