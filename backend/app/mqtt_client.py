@@ -27,12 +27,16 @@ class MQTTBridge:
         self.ws_manager = ws_manager
         self.loop = loop
         self.detector = AnomalyDetector()
-        self.client = mqtt.Client(client_id="backend-subscriber")
+        self.client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2, client_id="backend-subscriber"
+        )
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
 
-    def _on_connect(self, client, userdata, flags, rc):
-        print(f"[MQTT] connect rc={rc}")
+    def _on_connect(self, client, userdata, flags, reason_code, properties=None):
+        # Subscriptions are (re)made here so they survive an automatic
+        # reconnect - paho does not replay them for us.
+        print(f"[MQTT] connect: {reason_code}")
         client.subscribe("warehouse/+/temperature")
         client.subscribe("warehouse/+/humidity")
 

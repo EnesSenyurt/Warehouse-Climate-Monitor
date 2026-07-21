@@ -10,6 +10,7 @@ import asyncio
 import json
 import threading
 import types
+import warnings
 
 import pytest
 
@@ -149,6 +150,30 @@ def test_nan_does_not_poison_the_zscore_window(bridge, db):
 
     alerts = bridge.detector.evaluate("warehouse_a", "temperature", 24.0)
     assert [t for t, _ in alerts] == ["zscore"]
+
+
+# --------------------------------------------------------------------
+# Client setup
+#
+# Constructing MQTTBridge only builds the paho client and wires the
+# callbacks - no connection is attempted until start() is called.
+# --------------------------------------------------------------------
+
+def test_client_uses_a_non_deprecated_callback_api(loop):
+    """paho 2.x still accepts the v1 API, but warns. Fail on that warning."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        MQTTBridge(RecordingWS(), loop)
+
+
+def test_on_connect_subscribes_to_both_metric_topics(loop):
+    bridge = MQTTBridge(RecordingWS(), loop)
+    subscribed = []
+    client = types.SimpleNamespace(subscribe=subscribed.append)
+
+    bridge._on_connect(client, None, {}, 0)
+
+    assert subscribed == ["warehouse/+/temperature", "warehouse/+/humidity"]
 
 
 # --------------------------------------------------------------------
