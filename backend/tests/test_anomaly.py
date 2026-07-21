@@ -107,6 +107,40 @@ def test_perfectly_flat_window_never_fires_zscore(detector, no_cooldown):
     assert detector.evaluate("warehouse_a", "temperature", 24.0) == []
 
 
+def test_alerting_sample_still_enters_the_window(detector, no_cooldown):
+    """
+    The baseline must keep tracking reality. Previously an alerting sample
+    was skipped, so during a sustained shift the window never moved.
+    """
+    _warm_up(detector, [20.0, 20.2] * 5)
+    before = len(detector._windows[("warehouse_a", "temperature")])
+
+    detector.evaluate("warehouse_a", "temperature", 24.0)          # alerts
+
+    assert len(detector._windows[("warehouse_a", "temperature")]) == before + 1
+
+
+def test_sustained_shift_becomes_the_new_normal(detector, no_cooldown):
+    """
+    A level shift is a z-score event once, not forever. After the window
+    has absorbed it the detector goes quiet - staying out of range is the
+    threshold detector's job to keep reporting.
+    """
+    _warm_up(detector, [20.0, 20.2] * 5)
+    assert types_of(detector.evaluate("warehouse_a", "temperature", 24.0)) == ["zscore"]
+
+    fired = [bool(detector.evaluate("warehouse_a", "temperature", 24.0)) for _ in range(30)]
+    assert not fired[-1], "z-score should stop firing once the shift is the norm"
+
+
+def test_threshold_keeps_reporting_after_zscore_goes_quiet(detector, no_cooldown):
+    """The two layers must not go silent together on a sustained excursion."""
+    for _ in range(40):
+        alerts = detector.evaluate("warehouse_a", "temperature", 35.0)   # above max 26
+
+    assert types_of(alerts) == ["threshold"]
+
+
 def test_both_layers_can_fire_on_the_same_reading(detector, no_cooldown):
     _warm_up(detector, [20.0, 20.2] * 5)
 

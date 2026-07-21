@@ -120,7 +120,10 @@ Two detectors run in parallel:
    Values outside it raise a `threshold` alert.
 2. **Z-score** — a rolling window of the last 30 samples. An alert is
    raised when `|z| > 3`. Catches sudden jumps even when the value is
-   still within the threshold band.
+   still within the threshold band. Every sample enters the window, so a
+   level shift is reported once and then becomes the new baseline; a
+   reading that stays out of range keeps being reported by the threshold
+   layer.
 
 Alerts are de-duplicated: while a given warehouse/metric/detector keeps
 firing, repeats are suppressed for `ALERT_COOLDOWN_SECONDS` (60 s by

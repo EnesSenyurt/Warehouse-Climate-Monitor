@@ -19,6 +19,7 @@ WAREHOUSE_THRESHOLDS = {
 # Z-score anomaly detector - window size and deviation threshold.
 ZSCORE_WINDOW = 30       # last N samples
 ZSCORE_THRESHOLD = 3.0   # |z| > 3 counts as a deviation
+ZSCORE_MIN_SAMPLES = 10  # below this the mean/stddev are too noisy to trust
 
 # Alert de-duplication. A sustained anomaly would otherwise write one alert
 # row per reading (sensors publish every 5-10 s). While a given

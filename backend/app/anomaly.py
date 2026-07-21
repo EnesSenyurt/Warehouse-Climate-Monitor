@@ -20,6 +20,7 @@ from typing import Deque, Dict, List, Optional, Tuple
 from .config import (
     ALERT_COOLDOWN_SECONDS,
     WAREHOUSE_THRESHOLDS,
+    ZSCORE_MIN_SAMPLES,
     ZSCORE_THRESHOLD,
     ZSCORE_WINDOW,
 )
@@ -39,20 +40,29 @@ class AnomalyDetector:
 
     def _zscore_alert(self, warehouse_id: str, metric: str, value: float) -> Optional[str]:
         window = self._windows[(warehouse_id, metric)]
+        alert: Optional[str] = None
+
         # Wait until the window has enough samples - z-score is noisy otherwise
-        if len(window) >= 10:
+        if len(window) >= ZSCORE_MIN_SAMPLES:
             mean = sum(window) / len(window)
             var = sum((x - mean) ** 2 for x in window) / len(window)
             std = sqrt(var)
             if std > 0:
                 z = (value - mean) / std
                 if abs(z) > ZSCORE_THRESHOLD:
-                    return (
+                    alert = (
                         f"Z-score deviation: {metric}={value:.2f} "
                         f"(mean={mean:.2f}, std={std:.2f}, z={z:.2f})"
                     )
+
+        # The sample joins the window whether or not it alerted, so the
+        # baseline keeps tracking reality. A sustained shift therefore
+        # becomes the new normal after roughly ZSCORE_WINDOW samples and
+        # this detector goes quiet - by design. Staying outside the
+        # configured range is the threshold detector's job to report, and
+        # it keeps firing for as long as the condition lasts.
         window.append(value)
-        return None
+        return alert
 
     def _threshold_alert(self, warehouse_id: str, metric: str, value: float) -> Optional[str]:
         cfg = WAREHOUSE_THRESHOLDS.get(warehouse_id)
