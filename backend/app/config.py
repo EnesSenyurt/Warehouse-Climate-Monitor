@@ -19,3 +19,10 @@ WAREHOUSE_THRESHOLDS = {
 # Z-score anomaly detector - window size and deviation threshold.
 ZSCORE_WINDOW = 30       # last N samples
 ZSCORE_THRESHOLD = 3.0   # |z| > 3 counts as a deviation
+
+# Alert de-duplication. A sustained anomaly would otherwise write one alert
+# row per reading (sensors publish every 5-10 s). While a given
+# (warehouse, metric, alert_type) keeps firing, further alerts are suppressed
+# for this many seconds. The counter resets as soon as the metric reads
+# normal again, so a fresh episode always alerts immediately.
+ALERT_COOLDOWN_SECONDS = 60.0

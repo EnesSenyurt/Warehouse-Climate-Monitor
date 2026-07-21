@@ -122,6 +122,13 @@ Two detectors run in parallel:
    raised when `|z| > 3`. Catches sudden jumps even when the value is
    still within the threshold band.
 
+Alerts are de-duplicated: while a given warehouse/metric/detector keeps
+firing, repeats are suppressed for `ALERT_COOLDOWN_SECONDS` (60 s by
+default, in `backend/app/config.py`). Without this a two-minute anomaly
+would write an alert row for every reading. The cooldown resets as soon
+as the metric reads normal again, so a new episode always alerts right
+away.
+
 ## Sensor smoke test
 
 To validate just the sensor logic without a broker:

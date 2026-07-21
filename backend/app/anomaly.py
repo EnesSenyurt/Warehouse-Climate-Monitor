@@ -12,11 +12,19 @@ Two-layer anomaly detection:
 The two layers run independently; either can raise an alert.
 """
 
+import time
 from collections import defaultdict, deque
 from math import sqrt
 from typing import Deque, Dict, List, Optional, Tuple
 
-from .config import WAREHOUSE_THRESHOLDS, ZSCORE_THRESHOLD, ZSCORE_WINDOW
+from .config import (
+    ALERT_COOLDOWN_SECONDS,
+    WAREHOUSE_THRESHOLDS,
+    ZSCORE_THRESHOLD,
+    ZSCORE_WINDOW,
+)
+
+ALERT_TYPES = ("threshold", "zscore")
 
 
 class AnomalyDetector:
@@ -26,6 +34,8 @@ class AnomalyDetector:
         self._windows: Dict[Tuple[str, str], Deque[float]] = defaultdict(
             lambda: deque(maxlen=ZSCORE_WINDOW)
         )
+        # (warehouse, metric, alert_type) -> monotonic time the last alert was emitted
+        self._last_alert_at: Dict[Tuple[str, str, str], float] = {}
 
     def _zscore_alert(self, warehouse_id: str, metric: str, value: float) -> Optional[str]:
         window = self._windows[(warehouse_id, metric)]
@@ -61,13 +71,44 @@ class AnomalyDetector:
 
     def evaluate(self, warehouse_id: str, metric: str, value: float) -> List[Tuple[str, str]]:
         """
-        Returns all alerts for a single reading as [(alert_type, message), ...].
+        Returns the alerts worth recording for a single reading, as
+        [(alert_type, message), ...].
+
+        Both detectors run on every reading, but a sustained anomaly is
+        reported at most once per ALERT_COOLDOWN_SECONDS - see _dedupe.
         """
-        alerts: List[Tuple[str, str]] = []
+        fired: List[Tuple[str, str]] = []
         threshold = self._threshold_alert(warehouse_id, metric, value)
         if threshold:
-            alerts.append(("threshold", threshold))
+            fired.append(("threshold", threshold))
         z = self._zscore_alert(warehouse_id, metric, value)
         if z:
-            alerts.append(("zscore", z))
-        return alerts
+            fired.append(("zscore", z))
+        return self._dedupe(warehouse_id, metric, fired)
+
+    def _dedupe(
+        self, warehouse_id: str, metric: str, fired: List[Tuple[str, str]]
+    ) -> List[Tuple[str, str]]:
+        """
+        Suppresses repeat alerts while an anomaly persists.
+
+        An alert type that did NOT fire this round has its cooldown cleared,
+        so the next occurrence is reported immediately rather than being
+        swallowed by a cooldown left over from an earlier episode.
+        """
+        now = time.monotonic()
+        fired_types = {alert_type for alert_type, _ in fired}
+
+        for alert_type in ALERT_TYPES:
+            if alert_type not in fired_types:
+                self._last_alert_at.pop((warehouse_id, metric, alert_type), None)
+
+        kept: List[Tuple[str, str]] = []
+        for alert_type, message in fired:
+            key = (warehouse_id, metric, alert_type)
+            last = self._last_alert_at.get(key)
+            if last is not None and now - last < ALERT_COOLDOWN_SECONDS:
+                continue
+            self._last_alert_at[key] = now
+            kept.append((alert_type, message))
+        return kept

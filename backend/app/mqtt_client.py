@@ -12,6 +12,7 @@ cross that boundary.
 import asyncio
 import json
 import time
+from math import isfinite
 from typing import Optional
 
 import paho.mqtt.client as mqtt
@@ -53,8 +54,27 @@ class MQTTBridge:
             print(f"[MQTT] payload parse error: {e}")
             return
 
-        value = float(payload["value"])
-        timestamp = payload["timestamp"]
+        # Anything can publish to these topics, so treat the payload as
+        # untrusted: a bad message must be dropped, not kill the callback.
+        if not isinstance(payload, dict):
+            print(f"[MQTT] {msg.topic}: payload is not a JSON object, dropped")
+            return
+
+        try:
+            value = float(payload["value"])
+        except (KeyError, TypeError, ValueError):
+            print(f"[MQTT] {msg.topic}: missing or non-numeric 'value', dropped")
+            return
+
+        # NaN/inf would permanently poison the z-score window's mean and stddev
+        if not isfinite(value):
+            print(f"[MQTT] {msg.topic}: non-finite 'value', dropped")
+            return
+
+        timestamp = payload.get("timestamp")
+        if not isinstance(timestamp, str) or not timestamp:
+            print(f"[MQTT] {msg.topic}: missing or invalid 'timestamp', dropped")
+            return
 
         # Persist - since temperature and humidity come on separate topics, merge them
         if metric == "temperature":
