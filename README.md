@@ -176,6 +176,14 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+The dashboard's WebSocket reconnect logic is covered by vitest, with the
+socket and timers stubbed so no server is involved:
+
+```bash
+cd dashboard
+npm test
+```
+
 To validate just the sensor logic without a broker:
 
 ```bash
@@ -200,6 +208,16 @@ live-data effects are the easiest thing to break with a stale dependency:
 cd dashboard
 npm run lint
 ```
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull
+request, in two parallel jobs:
+
+- **Backend** — `ruff check .`, the pytest suite, and the sensor smoke test
+- **Dashboard** — `npm ci`, `npm run lint`, `npm test`, `npm run build`
+
+Both pin the same versions the Dockerfiles use (Python 3.11, Node 20).
 
 ## Project layout
 

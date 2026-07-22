@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"     # matches both Dockerfiles
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        working-directory: backend
+        run: pytest -q
+
+      - name: Sensor smoke test
+        working-directory: sensor_simulator
+        run: python test_local.py
+
+  dashboard:
+    name: Dashboard (lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"         # matches the dashboard Dockerfile
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      # ci, not install: fail if the lockfile and package.json disagree
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Lint
+        working-directory: dashboard
+        run: npm run lint
+
+      - name: Test
+        working-directory: dashboard
+        run: npm test
+
+      - name: Build
+        working-directory: dashboard
+        run: npm run build
