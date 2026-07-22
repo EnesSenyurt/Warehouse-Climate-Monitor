@@ -21,11 +21,9 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import paho.mqtt.client as mqtt
-
 from config import (
     ANOMALY_DURATION_MAX,
     ANOMALY_DURATION_MIN,
@@ -129,7 +127,7 @@ class WarehouseSensor:
             "warehouse_id": self.warehouse_id,
             "temperature": round(temp, 2),
             "humidity": round(max(0.0, min(100.0, hum)), 2),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "anomaly": self.anomaly.scenario if self.anomaly.active else None,
         }
 

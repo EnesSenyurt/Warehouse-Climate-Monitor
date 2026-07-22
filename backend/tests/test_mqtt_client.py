@@ -50,7 +50,7 @@ def bridge(db, loop):
 
 def deliver(bridge, payload, topic="warehouse/warehouse_a/temperature"):
     """Feeds a raw payload through the handler as paho would."""
-    raw = payload if isinstance(payload, (bytes, str)) else json.dumps(payload)
+    raw = payload if isinstance(payload, bytes | str) else json.dumps(payload)
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
     bridge._on_message(None, None, types.SimpleNamespace(topic=topic, payload=raw))

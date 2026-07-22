@@ -5,6 +5,8 @@ so that "Paint Workshop" is naturally warmer, "Electrical Storage" is
 drier, etc. — giving realistic per-warehouse behavior.
 """
 
+import os
+
 WAREHOUSES = {
     "warehouse_a": {
         "name": "Warehouse A",
@@ -54,8 +56,6 @@ WAREHOUSES = {
 
 # MQTT settings - inside docker-compose the 'mosquitto' hostname is used;
 # outside Docker it falls back to localhost.
-import os
-
 MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 

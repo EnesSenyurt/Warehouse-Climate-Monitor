@@ -13,13 +13,12 @@ import asyncio
 import json
 import time
 from math import isfinite
-from typing import Optional
 
 import paho.mqtt.client as mqtt
 
+from . import db
 from .anomaly import AnomalyDetector
 from .config import MQTT_HOST, MQTT_PORT, WAREHOUSE_THRESHOLDS
-from . import db
 
 
 class MQTTBridge:
@@ -40,7 +39,7 @@ class MQTTBridge:
         client.subscribe("warehouse/+/temperature")
         client.subscribe("warehouse/+/humidity")
 
-    def _parse_topic(self, topic: str) -> Optional[tuple]:
+    def _parse_topic(self, topic: str) -> tuple | None:
         # warehouse/{id}/temperature  or  warehouse/{id}/humidity
         parts = topic.split("/")
         if len(parts) != 3 or parts[0] != "warehouse":

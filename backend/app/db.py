@@ -6,9 +6,9 @@ thread can also write).
 
 import sqlite3
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, List, Optional
 
 from .config import DB_PATH
 
@@ -56,7 +56,12 @@ def connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def upsert_last_reading(warehouse_id: str, timestamp: str, temperature: Optional[float], humidity: Optional[float]) -> None:
+def upsert_last_reading(
+    warehouse_id: str,
+    timestamp: str,
+    temperature: float | None,
+    humidity: float | None,
+) -> None:
     """
     Temperature and humidity arrive in separate MQTT messages, so instead
     of storing two rows per timestamp we merge them: if the most recent
@@ -102,7 +107,7 @@ def upsert_last_reading(warehouse_id: str, timestamp: str, temperature: Optional
         conn.commit()
 
 
-def latest_per_warehouse() -> List[dict]:
+def latest_per_warehouse() -> list[dict]:
     with connect() as conn:
         rows = conn.execute(
             """
@@ -118,7 +123,7 @@ def latest_per_warehouse() -> List[dict]:
         return [dict(r) for r in rows]
 
 
-def history(warehouse_id: str, since_iso: str) -> List[dict]:
+def history(warehouse_id: str, since_iso: str) -> list[dict]:
     with connect() as conn:
         rows = conn.execute(
             """
@@ -132,7 +137,14 @@ def history(warehouse_id: str, since_iso: str) -> List[dict]:
         return [dict(r) for r in rows]
 
 
-def insert_alert(warehouse_id: str, timestamp: str, alert_type: str, metric: str, value: float, message: str) -> dict:
+def insert_alert(
+    warehouse_id: str,
+    timestamp: str,
+    alert_type: str,
+    metric: str,
+    value: float,
+    message: str,
+) -> dict:
     with _write_lock, connect() as conn:
         cur = conn.execute(
             """
@@ -173,7 +185,7 @@ def prune_older_than(cutoff_iso: str) -> dict:
     return {"readings": readings, "alerts": alerts}
 
 
-def recent_alerts(limit: int = 100) -> List[dict]:
+def recent_alerts(limit: int = 100) -> list[dict]:
     with connect() as conn:
         rows = conn.execute(
             "SELECT * FROM alerts ORDER BY id DESC LIMIT ?",

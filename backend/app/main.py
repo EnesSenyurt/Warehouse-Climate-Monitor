@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +11,6 @@ from . import db
 from .config import PRUNE_INTERVAL_SECONDS, RETENTION_DAYS, WAREHOUSE_THRESHOLDS
 from .mqtt_client import MQTTBridge
 from .ws_manager import WSManager
-
 
 ws_manager = WSManager()
 bridge: MQTTBridge | None = None
@@ -24,7 +23,7 @@ def retention_cutoff(now: datetime | None = None) -> str | None:
     """
     if RETENTION_DAYS <= 0:
         return None
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return (now - timedelta(days=RETENTION_DAYS)).isoformat()
 
 
@@ -124,7 +123,7 @@ def current():
 def history(warehouse_id: str, hours: float = Query(1.0, ge=0.05, le=168)):
     if warehouse_id not in WAREHOUSE_THRESHOLDS:
         raise HTTPException(status_code=404, detail="Unknown warehouse")
-    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    since = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
     return db.history(warehouse_id, since)
 
 

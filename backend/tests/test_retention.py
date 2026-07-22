@@ -4,13 +4,13 @@ and the background loop that drives it.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app import main as main_module
 
-NOW = datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 21, 12, 0, 0, tzinfo=UTC)
 
 
 def iso(dt):
@@ -103,7 +103,7 @@ def test_prune_loop_runs_immediately_then_waits(db, monkeypatch):
     monkeypatch.setattr(main_module, "RETENTION_DAYS", 7.0)
     monkeypatch.setattr(main_module, "PRUNE_INTERVAL_SECONDS", 3600)
 
-    old = iso(datetime.now(timezone.utc) - timedelta(days=10))
+    old = iso(datetime.now(UTC) - timedelta(days=10))
     db.upsert_last_reading("warehouse_a", old, temperature=21.0, humidity=None)
 
     async def run_one_pass():

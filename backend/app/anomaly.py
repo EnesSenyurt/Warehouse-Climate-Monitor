@@ -15,7 +15,6 @@ The two layers run independently; either can raise an alert.
 import time
 from collections import defaultdict, deque
 from math import sqrt
-from typing import Deque, Dict, List, Optional, Tuple
 
 from .config import (
     ALERT_COOLDOWN_SECONDS,
@@ -32,15 +31,15 @@ class AnomalyDetector:
     """Holds a sliding window per (warehouse, metric)."""
 
     def __init__(self) -> None:
-        self._windows: Dict[Tuple[str, str], Deque[float]] = defaultdict(
+        self._windows: dict[tuple[str, str], deque[float]] = defaultdict(
             lambda: deque(maxlen=ZSCORE_WINDOW)
         )
         # (warehouse, metric, alert_type) -> monotonic time the last alert was emitted
-        self._last_alert_at: Dict[Tuple[str, str, str], float] = {}
+        self._last_alert_at: dict[tuple[str, str, str], float] = {}
 
-    def _zscore_alert(self, warehouse_id: str, metric: str, value: float) -> Optional[str]:
+    def _zscore_alert(self, warehouse_id: str, metric: str, value: float) -> str | None:
         window = self._windows[(warehouse_id, metric)]
-        alert: Optional[str] = None
+        alert: str | None = None
 
         # Wait until the window has enough samples - z-score is noisy otherwise
         if len(window) >= ZSCORE_MIN_SAMPLES:
@@ -64,7 +63,7 @@ class AnomalyDetector:
         window.append(value)
         return alert
 
-    def _threshold_alert(self, warehouse_id: str, metric: str, value: float) -> Optional[str]:
+    def _threshold_alert(self, warehouse_id: str, metric: str, value: float) -> str | None:
         cfg = WAREHOUSE_THRESHOLDS.get(warehouse_id)
         if not cfg:
             return None
@@ -79,7 +78,7 @@ class AnomalyDetector:
             return f"{metric} above normal: {value:.2f} > {hi:.2f}"
         return None
 
-    def evaluate(self, warehouse_id: str, metric: str, value: float) -> List[Tuple[str, str]]:
+    def evaluate(self, warehouse_id: str, metric: str, value: float) -> list[tuple[str, str]]:
         """
         Returns the alerts worth recording for a single reading, as
         [(alert_type, message), ...].
@@ -87,7 +86,7 @@ class AnomalyDetector:
         Both detectors run on every reading, but a sustained anomaly is
         reported at most once per ALERT_COOLDOWN_SECONDS - see _dedupe.
         """
-        fired: List[Tuple[str, str]] = []
+        fired: list[tuple[str, str]] = []
         threshold = self._threshold_alert(warehouse_id, metric, value)
         if threshold:
             fired.append(("threshold", threshold))
@@ -97,8 +96,8 @@ class AnomalyDetector:
         return self._dedupe(warehouse_id, metric, fired)
 
     def _dedupe(
-        self, warehouse_id: str, metric: str, fired: List[Tuple[str, str]]
-    ) -> List[Tuple[str, str]]:
+        self, warehouse_id: str, metric: str, fired: list[tuple[str, str]]
+    ) -> list[tuple[str, str]]:
         """
         Suppresses repeat alerts while an anomaly persists.
 
@@ -113,7 +112,7 @@ class AnomalyDetector:
             if alert_type not in fired_types:
                 self._last_alert_at.pop((warehouse_id, metric, alert_type), None)
 
-        kept: List[Tuple[str, str]] = []
+        kept: list[tuple[str, str]] = []
         for alert_type, message in fired:
             key = (warehouse_id, metric, alert_type)
             last = self._last_alert_at.get(key)

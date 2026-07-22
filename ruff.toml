@@ -1,0 +1,24 @@
+# Lint config for the Python side (backend/ and sensor_simulator/).
+# Run from the repo root with: ruff check .
+
+line-length = 110
+target-version = "py311"
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes - unused imports/variables, undefined names
+    "I",    # import sorting
+    "B",    # flake8-bugbear - likely bugs
+    "UP",   # pyupgrade - outdated syntax
+    "C4",   # comprehension simplifications
+]
+
+[lint.per-file-ignores]
+# WAREHOUSE_THRESHOLDS is one aligned row per warehouse. Wrapping the rows
+# to fit the line limit would destroy the column alignment that makes the
+# table readable at a glance.
+"backend/app/config.py" = ["E501"]
+
+[lint.isort]
+known-first-party = ["app"]

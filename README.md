@@ -161,6 +161,24 @@ cd sensor_simulator
 python test_local.py
 ```
 
+## Linting
+
+Python is linted with [ruff](https://docs.astral.sh/ruff/) (config in
+`ruff.toml`), covering both `backend/` and `sensor_simulator/`:
+
+```bash
+ruff check .          # from the repo root
+ruff check . --fix    # apply the safe fixes
+```
+
+The dashboard uses ESLint, with the React hooks rules enabled — the
+live-data effects are the easiest thing to break with a stale dependency:
+
+```bash
+cd dashboard
+npm run lint
+```
+
 ## Project layout
 
 ```
