@@ -14,6 +14,10 @@ const RECENT_ALERT_MS = 60_000
 // How long to wait before retrying the initial load after a failure.
 const RETRY_MS = 5000
 
+// How often the clock advances, for "is this alert still recent" and
+// "has this warehouse stopped reporting".
+const TICK_MS = 10_000
+
 export default function App() {
   const [current, setCurrent] = useState([])          // /current response
   const [alerts, setAlerts] = useState([])            // recent alerts
@@ -23,6 +27,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)        // first load only
   const [loadError, setLoadError] = useState(null)    // backend unreachable
   const [reloadKey, setReloadKey] = useState(0)       // bumped to retry
+  const [now, setNow] = useState(() => Date.now())    // ticking clock
 
   // We keep the current series in a ref so per-message updates don't need
   // to snapshot the full state - only the affected warehouse's series is
@@ -127,16 +132,23 @@ export default function App() {
     return () => live.close()
   }, [range])
 
+  // Drives anything time-relative. Without it those values were only
+  // recomputed when new data arrived, so a warehouse that stopped
+  // reporting stayed "alerting" indefinitely.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => clearInterval(timer)
+  }, [])
+
   // Warehouses whose alerts landed within the last 60 s are shown as alerting
   const alertedIds = useMemo(() => {
-    const now = Date.now()
     const s = new Set()
     for (const a of alerts) {
       const t = new Date(a.timestamp).getTime()
       if (now - t < RECENT_ALERT_MS) s.add(a.warehouse_id)
     }
     return s
-  }, [alerts])
+  }, [alerts, now])
 
   const summary = useMemo(() => {
     const total = current.length
@@ -198,6 +210,7 @@ export default function App() {
                 warehouse={w}
                 series={series[w.warehouse_id] || []}
                 isAlerted={alertedIds.has(w.warehouse_id)}
+                now={now}
               />
             ))}
           </div>
