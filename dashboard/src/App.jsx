@@ -11,12 +11,18 @@ const RANGES = [
 // A warehouse is treated as "in alert" if it fired within the last 60 s.
 const RECENT_ALERT_MS = 60_000
 
+// How long to wait before retrying the initial load after a failure.
+const RETRY_MS = 5000
+
 export default function App() {
   const [current, setCurrent] = useState([])          // /current response
   const [alerts, setAlerts] = useState([])            // recent alerts
   const [range, setRange] = useState(RANGES[0].hours)
   const [series, setSeries] = useState({})            // warehouseId -> [{timestamp, temperature, humidity}]
   const [wsOk, setWsOk] = useState(false)
+  const [loading, setLoading] = useState(true)        // first load only
+  const [loadError, setLoadError] = useState(null)    // backend unreachable
+  const [reloadKey, setReloadKey] = useState(0)       // bumped to retry
 
   // We keep the current series in a ref so per-message updates don't need
   // to snapshot the full state - only the affected warehouse's series is
@@ -43,18 +49,35 @@ export default function App() {
         setSeries(next)
 
         const a = await fetchAlerts(50)
-        if (!cancelled) setAlerts(a)
+        if (cancelled) return
+        setAlerts(a)
+        setLoadError(null)
       } catch (e) {
+        // Previously this only reached the console, so an unreachable
+        // backend looked identical to a warehouse with no data yet.
         console.error(e)
+        if (!cancelled) setLoadError(e.message || 'Could not reach the backend')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [range])
+  }, [range, reloadKey])
 
-  // WebSocket - live stream
+  // Retry while the backend is unreachable. The live socket reconnects on
+  // its own, but it cannot repopulate the cards: incoming readings only
+  // update warehouses that are already in the list, and that list comes
+  // from /current.
   useEffect(() => {
-    const ws = openLiveSocket((msg) => {
+    if (!loadError) return
+    const timer = setTimeout(() => setReloadKey((k) => k + 1), RETRY_MS)
+    return () => clearTimeout(timer)
+  }, [loadError, reloadKey])
+
+  // WebSocket - live stream, reconnects itself if the backend goes away
+  useEffect(() => {
+    function handleReading(msg) {
       if (msg.type !== 'reading') return
 
       // Merge logic - if the latest sample for this warehouse arrived
@@ -98,11 +121,10 @@ export default function App() {
       if (msg.alerts && msg.alerts.length) {
         setAlerts((a) => [...msg.alerts, ...a].slice(0, 100))
       }
-    })
-    ws.onopen = () => setWsOk(true)
-    ws.onclose = () => setWsOk(false)
-    ws.onerror = () => setWsOk(false)
-    return () => ws.close()
+    }
+
+    const live = openLiveSocket({ onMessage: handleReading, onStatus: setWsOk })
+    return () => live.close()
   }, [range])
 
   // Warehouses whose alerts landed within the last 60 s are shown as alerting
@@ -133,6 +155,13 @@ export default function App() {
       </header>
 
       <div className="container">
+        {loadError && (
+          <div className="error-banner">
+            ✕ Could not load data from the backend: {loadError}.
+            {' '}Retrying automatically once the connection is back.
+          </div>
+        )}
+
         {summary.alerted > 0 && (
           <div className="alerts-banner">
             ⚠ {summary.alerted} warehouse(s) currently reporting anomalies.
@@ -157,16 +186,22 @@ export default function App() {
           ))}
         </div>
 
-        <div className="grid">
-          {current.map((w) => (
-            <WarehouseCard
-              key={w.warehouse_id}
-              warehouse={w}
-              series={series[w.warehouse_id] || []}
-              isAlerted={alertedIds.has(w.warehouse_id)}
-            />
-          ))}
-        </div>
+        {loading && current.length === 0 ? (
+          <div className="placeholder">Loading warehouses…</div>
+        ) : current.length === 0 ? (
+          <div className="placeholder">No warehouses to show.</div>
+        ) : (
+          <div className="grid">
+            {current.map((w) => (
+              <WarehouseCard
+                key={w.warehouse_id}
+                warehouse={w}
+                series={series[w.warehouse_id] || []}
+                isAlerted={alertedIds.has(w.warehouse_id)}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="alerts-list">
           <h2>Recent Alerts</h2>

@@ -137,6 +137,28 @@ h2 { font-size: 16px; margin: 0 0 8px 0; }
   font-size: 14px;
 }
 
+/* Backend unreachable - distinct from .alerts-banner, which reports a
+   warehouse anomaly rather than a problem with the dashboard itself. */
+.error-banner {
+  background: rgba(148,163,184,0.10);
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.placeholder {
+  background: var(--card);
+  border: 1px dashed var(--card-border);
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
 .alerts-list {
   margin-top: 20px;
   background: var(--card);
