@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAlerts, fetchCurrent, fetchHistory, openLiveSocket } from './api'
 import WarehouseCard from './WarehouseCard'
+import { isOutOfRange } from './thresholds'
 
 const RANGES = [
   { label: 'Last 1h', hours: 1 },
@@ -150,8 +151,15 @@ export default function App() {
       const t = new Date(a.timestamp).getTime()
       if (now - t < RECENT_ALERT_MS) s.add(a.warehouse_id)
     }
+    // A reading still outside its range counts too. The backend emits at
+    // most one alert per cooldown, so during a long excursion the newest
+    // alert can be older than this window while the condition holds -
+    // which showed up as a card reading NORMAL next to a red value.
+    for (const w of current) {
+      if (isOutOfRange(w)) s.add(w.warehouse_id)
+    }
     return s
-  }, [alerts, now])
+  }, [alerts, current, now])
 
   const summary = useMemo(() => {
     const total = current.length
@@ -179,7 +187,7 @@ export default function App() {
 
         {summary.alerted > 0 && (
           <div className="alerts-banner">
-            ⚠ {summary.alerted} warehouse(s) currently reporting anomalies.
+            ⚠ {summary.alerted} warehouse(s) with readings outside their normal range.
           </div>
         )}
 

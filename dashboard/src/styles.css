@@ -132,6 +132,7 @@ h2 { font-size: 16px; margin: 0 0 8px 0; }
 }
 .badge.ok { background: rgba(16,185,129,0.15); color: var(--ok-text); }
 .badge.err { background: rgba(239,68,68,0.15); color: var(--err-text); }
+.badge.warn { background: rgba(245,158,11,0.15); color: var(--warn); }
 
 .readings {
   display: flex;

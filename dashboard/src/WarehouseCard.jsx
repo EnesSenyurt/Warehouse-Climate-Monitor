@@ -1,5 +1,6 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid, Legend } from 'recharts'
 import { freshness } from './freshness'
+import { breach } from './thresholds'
 
 // The backend sends "reading" events one metric at a time (temperature or
 // humidity). Chart wants a single time series so points are merged upstream.
@@ -8,7 +9,11 @@ export default function WarehouseCard({ warehouse, series, isAlerted, now }) {
     // HH:MM on the axis - at one sample every few seconds the seconds
     // are noise, and the shorter label lets more ticks fit.
     t: row.timestamp,
-    label: new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    // hour12:false, or an en-US browser renders "01:10 PM" - longer than
+    // the label this replaced, and inconsistent with other locales.
+    label: new Date(row.timestamp).toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }),
     // The tooltip is where the exact instant is worth having
     fullLabel: new Date(row.timestamp).toLocaleTimeString(),
     temperature: row.temperature,
@@ -19,16 +24,8 @@ export default function WarehouseCard({ warehouse, series, isAlerted, now }) {
   const updated = freshness(warehouse.timestamp, now)
 
   // The card as a whole turns red when the warehouse alerts, but that
-  // does not say which metric caused it. Compare against the same bounds
-  // the backend's threshold detector uses. Returns a direction rather
-  // than a flag so the breach is marked by an arrow as well as colour -
-  // colour alone should not be the only cue.
-  const breach = (value, min, max) => {
-    if (value == null) return null
-    if (value > max) return 'high'
-    if (value < min) return 'low'
-    return null
-  }
+  // does not say which metric caused it. The arrow means colour is not
+  // the only cue, and the direction is useful in its own right.
   const tempBreach = breach(latest.temperature, warehouse.temp_min, warehouse.temp_max)
   const humBreach = breach(latest.humidity, warehouse.hum_min, warehouse.hum_max)
   const arrow = (dir) => (dir === 'high' ? ' ▲' : dir === 'low' ? ' ▼' : '')
@@ -37,8 +34,10 @@ export default function WarehouseCard({ warehouse, series, isAlerted, now }) {
     <div className={`warehouse-card ${isAlerted ? 'alert' : ''}`}>
       <div className="warehouse-header">
         <h2>{warehouse.name}</h2>
-        <span className={`badge ${isAlerted ? 'err' : 'ok'}`}>
-          {isAlerted ? 'ALERT' : 'NORMAL'}
+        {/* A silent feed means the current state is unknown, so the badge
+            says so rather than vouching for the last reading. */}
+        <span className={`badge ${updated.stale ? 'warn' : isAlerted ? 'err' : 'ok'}`}>
+          {updated.stale ? 'STALE' : isAlerted ? 'ALERT' : 'NORMAL'}
         </span>
       </div>
       <div className="readings">
