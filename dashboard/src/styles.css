@@ -58,7 +58,6 @@ h2 { font-size: 16px; margin: 0 0 8px 0; }
 }
 
 .summary-card.ok .value { color: var(--ok); }
-.summary-card.warn .value { color: var(--warn); }
 .summary-card.err .value { color: var(--err); }
 
 .controls {
@@ -183,7 +182,7 @@ h2 { font-size: 16px; margin: 0 0 8px 0; }
   border-radius: 8px;
   padding: 32px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -195,6 +194,23 @@ h2 { font-size: 16px; margin: 0 0 8px 0; }
   padding: 14px;
   max-height: 240px;
   overflow-y: auto;
+}
+
+.alerts-list h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.alerts-list h2 .count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.alerts-list .empty {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .alerts-list .item {

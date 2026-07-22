@@ -18,6 +18,9 @@ const RETRY_MS = 5000
 // "has this warehouse stopped reporting".
 const TICK_MS = 10_000
 
+// The list keeps up to 100 alerts but only renders the newest few.
+const SHOWN_ALERTS = 20
+
 export default function App() {
   const [current, setCurrent] = useState([])          // /current response
   const [alerts, setAlerts] = useState([])            // recent alerts
@@ -217,9 +220,16 @@ export default function App() {
         )}
 
         <div className="alerts-list">
-          <h2>Recent Alerts</h2>
-          {alerts.length === 0 && <div style={{ color: '#94a3b8', fontSize: 13 }}>No alerts yet.</div>}
-          {alerts.slice(0, 20).map((a) => (
+          <h2>
+            Recent Alerts
+            {alerts.length > 0 && (
+              <span className="count">
+                showing {Math.min(alerts.length, SHOWN_ALERTS)} of {alerts.length}
+              </span>
+            )}
+          </h2>
+          {alerts.length === 0 && <div className="empty">No alerts yet.</div>}
+          {alerts.slice(0, SHOWN_ALERTS).map((a) => (
             <div key={a.id} className="item">
               <span className="depo">{a.warehouse_id}</span>{' · '}
               <span className="type">{a.alert_type}</span>{' · '}
