@@ -1,6 +1,8 @@
 # Secrets / env
 .env
 .env.*
+# The documented template is meant to be committed
+!.env.example
 
 # Python
 __pycache__/

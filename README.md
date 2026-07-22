@@ -132,6 +132,28 @@ would write an alert row for every reading. The cooldown resets as soon
 as the metric reads normal again, so a new episode always alerts right
 away.
 
+## Configuration
+
+All settings have working defaults — the stack runs with no configuration
+at all. `.env.example` documents every variable; copy it to `.env` to
+override.
+
+| Variable | Used by | Default | Description |
+|----------|---------|---------|-------------|
+| `MQTT_HOST` | backend, simulator | `localhost` | Broker hostname (`mosquitto` inside Docker) |
+| `MQTT_PORT` | backend, simulator | `1883` | Broker port |
+| `DB_PATH` | backend | `data/warehouse.db` | SQLite file location |
+| `RETENTION_DAYS` | backend | `7` | Age at which rows are pruned; `0` disables pruning |
+| `PRUNE_INTERVAL_SECONDS` | backend | `3600` | How often the prune task runs |
+| `VITE_API_BASE` | dashboard | `http://localhost:8000` | Backend base URL |
+| `VITE_WS_BASE` | dashboard | `VITE_API_BASE` with `http`→`ws` | WebSocket base URL |
+
+The two `VITE_` variables are read at **build** time and baked into the
+bundle, so setting them on an already-built image has no effect —
+`docker-compose.yml` passes `VITE_API_BASE` as a build arg. Their value
+has to be reachable from the browser, not from inside the container
+network.
+
 ## Retention
 
 Readings and alerts older than `RETENTION_DAYS` (default **7**) are
