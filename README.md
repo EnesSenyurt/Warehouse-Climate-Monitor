@@ -132,6 +132,15 @@ would write an alert row for every reading. The cooldown resets as soon
 as the metric reads normal again, so a new episode always alerts right
 away.
 
+## Retention
+
+Readings and alerts older than `RETENTION_DAYS` (default **7**) are
+deleted by a background task that runs every `PRUNE_INTERVAL_SECONDS`
+(default 3600) and once at startup. Without it the `readings` table grows
+for as long as the stack is up. `/history` never looks back further than
+168 h, so a longer window is archive-only. Set `RETENTION_DAYS=0` to
+disable pruning and keep everything.
+
 ## Tests
 
 Backend unit tests cover the anomaly detector, the alert de-duplication

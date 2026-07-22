@@ -21,6 +21,13 @@ ZSCORE_WINDOW = 30       # last N samples
 ZSCORE_THRESHOLD = 3.0   # |z| > 3 counts as a deviation
 ZSCORE_MIN_SAMPLES = 10  # below this the mean/stddev are too noisy to trust
 
+# Retention. Readings and alerts older than RETENTION_DAYS are deleted
+# periodically, so the database does not grow without bound. /history
+# never looks back further than 168 h (7 days) anyway. Set to 0 to
+# disable pruning and keep everything.
+RETENTION_DAYS = float(os.getenv("RETENTION_DAYS", "7"))
+PRUNE_INTERVAL_SECONDS = float(os.getenv("PRUNE_INTERVAL_SECONDS", "3600"))
+
 # Alert de-duplication. A sustained anomaly would otherwise write one alert
 # row per reading (sensors publish every 5-10 s). While a given
 # (warehouse, metric, alert_type) keeps firing, further alerts are suppressed

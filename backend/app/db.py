@@ -153,6 +153,26 @@ def insert_alert(warehouse_id: str, timestamp: str, alert_type: str, metric: str
         }
 
 
+def prune_older_than(cutoff_iso: str) -> dict:
+    """
+    Deletes readings and alerts stamped before `cutoff_iso`, returning how
+    many rows each table lost.
+
+    Timestamps are compared as strings, the same way `history` filters
+    them: they are ISO-8601 values produced with a UTC offset, so
+    lexicographic order matches chronological order.
+    """
+    with _write_lock, connect() as conn:
+        readings = conn.execute(
+            "DELETE FROM readings WHERE timestamp < ?", (cutoff_iso,)
+        ).rowcount
+        alerts = conn.execute(
+            "DELETE FROM alerts WHERE timestamp < ?", (cutoff_iso,)
+        ).rowcount
+        conn.commit()
+    return {"readings": readings, "alerts": alerts}
+
+
 def recent_alerts(limit: int = 100) -> List[dict]:
     with connect() as conn:
         rows = conn.execute(

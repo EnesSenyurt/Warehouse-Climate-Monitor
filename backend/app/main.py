@@ -1,20 +1,51 @@
 """FastAPI app - REST + WebSocket + MQTT bridge."""
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
-from .config import WAREHOUSE_THRESHOLDS
+from .config import PRUNE_INTERVAL_SECONDS, RETENTION_DAYS, WAREHOUSE_THRESHOLDS
 from .mqtt_client import MQTTBridge
 from .ws_manager import WSManager
 
 
 ws_manager = WSManager()
 bridge: MQTTBridge | None = None
+
+
+def retention_cutoff(now: datetime | None = None) -> str | None:
+    """
+    Timestamp before which rows are eligible for deletion, or None when
+    retention is switched off.
+    """
+    if RETENTION_DAYS <= 0:
+        return None
+    now = now or datetime.now(timezone.utc)
+    return (now - timedelta(days=RETENTION_DAYS)).isoformat()
+
+
+async def prune_loop() -> None:
+    """Deletes aged-out rows on a fixed interval, starting immediately."""
+    while True:
+        cutoff = retention_cutoff()
+        if cutoff:
+            try:
+                # SQLite deletes block; keep them off the event loop so
+                # requests and the WebSocket fan-out are not stalled.
+                removed = await asyncio.to_thread(db.prune_older_than, cutoff)
+                if removed["readings"] or removed["alerts"]:
+                    print(
+                        f"[RETENTION] pruned {removed['readings']} reading(s) and "
+                        f"{removed['alerts']} alert(s) older than {cutoff}"
+                    )
+            except Exception as e:
+                # A failed prune must not kill the loop - try again next tick
+                print(f"[RETENTION] prune failed: {e}")
+        await asyncio.sleep(PRUNE_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
@@ -24,7 +55,20 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_running_loop()
     bridge = MQTTBridge(ws_manager, loop)
     bridge.start()
+
+    if RETENTION_DAYS > 0:
+        print(f"[RETENTION] keeping {RETENTION_DAYS} day(s) of history")
+        pruner = asyncio.create_task(prune_loop())
+    else:
+        print("[RETENTION] disabled - readings are kept indefinitely")
+        pruner = None
+
     yield
+
+    if pruner:
+        pruner.cancel()
+        with suppress(asyncio.CancelledError):
+            await pruner
     if bridge:
         bridge.stop()
 
